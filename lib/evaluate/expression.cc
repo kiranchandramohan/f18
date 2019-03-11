@@ -316,6 +316,22 @@ bool GenericExprWrapper::operator==(const GenericExprWrapper &that) const {
   return v == that.v;
 }
 
+template<TypeCategory CAT> int Expr<SomeKind<CAT>>::GetKind() const {
+  return std::visit(
+      [](const auto &kx) { return std::decay_t<decltype(kx)>::Result::kind; },
+      u);
+}
+
+int Expr<SomeCharacter>::GetKind() const {
+  return std::visit(
+      [](const auto &kx) { return std::decay_t<decltype(kx)>::Result::kind; },
+      u);
+}
+
+Expr<SubscriptInteger> Expr<SomeCharacter>::LEN() const {
+  return std::visit([](const auto &kx) { return kx.LEN(); }, u);
+}
+
 // Template instantiations to resolve the "extern template" declarations
 // that appear in expression.h.
 

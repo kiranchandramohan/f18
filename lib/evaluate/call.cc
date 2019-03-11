@@ -14,6 +14,8 @@
 
 #include "call.h"
 #include "expression.h"
+#include "tools.h"
+#include "../common/idioms.h"
 #include "../semantics/symbol.h"
 
 namespace Fortran::evaluate {
@@ -112,8 +114,21 @@ std::ostream &ProcedureRef::AsFortran(std::ostream &o) const {
 }
 
 Expr<SubscriptInteger> ProcedureRef::LEN() const {
-  // TODO: the results of the intrinsic functions REPEAT and TRIM have
-  // unpredictable lengths; maybe the concept of LEN() has to become dynamic
+  if (const auto *intrinsic{std::get_if<SpecificIntrinsic>(&proc_.u)}) {
+    if (intrinsic->name == "repeat") {
+      // LEN(REPEAT(ch,n)) == LEN(ch) * n
+      CHECK(arguments_.size() == 2);
+      const auto *stringArg{
+          UnwrapExpr<Expr<SomeCharacter>>(arguments_[0].value())};
+      const auto *nCopiesArg{
+          UnwrapExpr<Expr<SomeInteger>>(arguments_[1].value())};
+      CHECK(stringArg != nullptr && nCopiesArg != nullptr);
+      auto stringLen{stringArg->LEN()};
+      return std::move(stringLen) *
+          ConvertTo(stringLen, common::Clone(*nCopiesArg));
+    }
+    // TODO: LEN(TRIM(ch)) is unknown before execution
+  }
   return proc_.LEN();
 }
 

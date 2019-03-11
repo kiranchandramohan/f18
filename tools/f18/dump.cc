@@ -16,7 +16,7 @@
 // Each is based on operator<< for that type. There are overloadings for
 // reference and pointer, and for dumping to a provided ostream or cerr.
 
-#ifdef DEBUG
+#ifdef DEBUGF18
 
 #include <iostream>
 

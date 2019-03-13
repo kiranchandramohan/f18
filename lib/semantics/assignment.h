@@ -17,6 +17,7 @@
 
 #include "semantics.h"
 #include "../common/indirection.h"
+#include "../evaluate/expression.h"
 
 namespace Fortran::parser {
 template<typename> struct Statement;
@@ -29,6 +30,11 @@ struct WhereStmt;
 struct WhereConstruct;
 struct ForallStmt;
 struct ForallConstruct;
+}
+
+namespace Fortran::evaluate {
+void CheckPointerAssignment(parser::ContextualMessages &, const Symbol &,
+    const evaluate::Expr<evaluate::SomeType> &);
 }
 
 namespace Fortran::semantics {
@@ -62,6 +68,5 @@ void AnalyzeAssignment(
 // well as in DO CONCURRENT loops.
 void AnalyzeConcurrentHeader(
     SemanticsContext &, const parser::ConcurrentHeader &);
-
 }
 #endif  // FORTRAN_SEMANTICS_ASSIGNMENT_H_

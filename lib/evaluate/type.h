@@ -72,6 +72,7 @@ struct DynamicType {
     : category{TypeCategory::Derived}, derived{&dt} {}
 
   bool operator==(const DynamicType &) const;
+  bool operator!=(const DynamicType &that) const { return !(*this == that); }
   std::string AsFortran() const;
   std::string AsFortran(std::string &&charLenExpr) const;
   DynamicType ResultTypeForMultiply(const DynamicType &) const;

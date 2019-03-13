@@ -26,14 +26,17 @@
 #include "../common/enum-set.h"
 #include "../common/idioms.h"
 #include "../common/indirection.h"
+#include "../semantics/symbol.h"
 #include <memory>
+#include <optional>
 #include <ostream>
 #include <variant>
 #include <vector>
 
 namespace Fortran::evaluate::characteristics {
 
-// Forward declare Procedure so dummy procedures can use it indirectly
+// Forward declare Procedure so dummy procedures and procedure pointers
+// can use it indirectly.
 struct Procedure;
 
 // 15.3.2.2
@@ -41,6 +44,7 @@ struct DummyDataObject {
   ENUM_CLASS(Attr, AssumedRank, Optional, Allocatable, Asynchronous, Contiguous,
       Value, Volatile, Polymorphic, Pointer, Target)
   DEFAULT_CONSTRUCTORS_AND_ASSIGNMENTS(DummyDataObject)
+  explicit DummyDataObject(DynamicType t) : type{t} {}
   DynamicType type;
   std::vector<std::optional<Expr<SubscriptInteger>>> shape;
   std::vector<Expr<SubscriptInteger>> coshape;
@@ -54,6 +58,7 @@ struct DummyDataObject {
 struct DummyProcedure {
   ENUM_CLASS(Attr, Pointer, Optional)
   DEFAULT_CONSTRUCTORS_AND_ASSIGNMENTS(DummyProcedure)
+  DummyProcedure() {}
   common::OwningPointer<Procedure> explicitProcedure;
   common::EnumSet<Attr, 32> attrs;
   bool operator==(const DummyProcedure &) const;
@@ -70,28 +75,63 @@ struct AlternateReturn {
 using DummyArgument =
     std::variant<DummyDataObject, DummyProcedure, AlternateReturn>;
 
+bool IsOptional(const DummyArgument &da) {
+  return std::visit(
+      common::visitors{
+          [](const DummyDataObject &data) {
+            return data.attrs.test(DummyDataObject::Attr::Optional);
+          },
+          [](const DummyProcedure &proc) {
+            return proc.attrs.test(DummyProcedure::Attr::Optional);
+          },
+          [](const auto &) { return false; },
+      },
+      da);
+}
+
 // 15.3.3
 struct FunctionResult {
-  ENUM_CLASS(
-      Attr, Polymorphic, Allocatable, Pointer, Contiguous, ProcedurePointer)
+  ENUM_CLASS(Attr, Polymorphic, Allocatable, Pointer, Contiguous)
   DEFAULT_CONSTRUCTORS_AND_ASSIGNMENTS(FunctionResult)
+  explicit FunctionResult(DynamicType t) : type{t} {}
   DynamicType type;
   int rank{0};
   common::EnumSet<Attr, 32> attrs;
+  common::OwningPointer<Procedure> procedurePointer;
   bool operator==(const FunctionResult &) const;
   std::ostream &Dump(std::ostream &) const;
 };
 
 // 15.3.1
 struct Procedure {
-  ENUM_CLASS(Attr, Pure, Elemental, Bind_C)
+  ENUM_CLASS(Attr, Pure, Elemental, BindC)
   Procedure() {}
   DEFAULT_CONSTRUCTORS_AND_ASSIGNMENTS(Procedure)
-  std::optional<FunctionResult> functionResult;  // absent means subroutine
+
+  bool IsFunction() const { return functionResult.has_value(); }
+  bool IsSubroutine() const { return !IsFunction(); }
+  bool IsPure() const { return attrs.test(Attr::Pure); }
+  bool IsElemental() const { return attrs.test(Attr::Elemental); }
+  bool IsBindC() const { return attrs.test(Attr::BindC); }
+
+  std::optional<FunctionResult> functionResult;
   std::vector<DummyArgument> dummyArguments;
   common::EnumSet<Attr, 32> attrs;
   bool operator==(const Procedure &) const;
   std::ostream &Dump(std::ostream &) const;
 };
+
+template<typename A> std::optional<A> Characterize(const semantics::Symbol &);
+template<>
+std::optional<DummyDataObject> Characterize<DummyDataObject>(
+    const semantics::Symbol &);
+template<>
+std::optional<DummyProcedure> Characterize<DummyProcedure>(
+    const semantics::Symbol &);
+template<>
+std::optional<DummyArgument> Characterize<DummyArgument>(
+    const semantics::Symbol &);
+template<>
+std::optional<Procedure> Characterize<Procedure>(const semantics::Symbol &);
 }
 #endif  // FORTRAN_EVALUATE_CHARACTERISTICS_H_

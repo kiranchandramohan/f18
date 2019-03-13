@@ -127,7 +127,14 @@ Expr<SubscriptInteger> ProcedureRef::LEN() const {
       return std::move(stringLen) *
           ConvertTo(stringLen, common::Clone(*nCopiesArg));
     }
-    // TODO: LEN(TRIM(ch)) is unknown before execution
+    if (intrinsic->name == "trim") {
+      // LEN(TRIM(ch)) is unknown without execution.
+      CHECK(arguments_.size() == 1);
+      const auto *stringArg{
+          UnwrapExpr<Expr<SomeCharacter>>(arguments_[0].value())};
+      CHECK(stringArg != nullptr);
+      return stringArg->LEN();
+    }
   }
   return proc_.LEN();
 }

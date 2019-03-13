@@ -15,6 +15,7 @@
 #include "assignment.h"
 #include "expression.h"
 #include "symbol.h"
+#include "tools.h"
 #include "../common/idioms.h"
 #include "../evaluate/expression.h"
 #include "../evaluate/fold.h"
@@ -24,8 +25,100 @@
 #include "../parser/parse-tree.h"
 #include <optional>
 #include <set>
+#include <type_traits>
 
 using namespace Fortran::parser::literals;
+
+namespace Fortran::evaluate {
+
+template<typename A>
+void CheckPointerAssignment(
+    parser::ContextualMessages messages, const Symbol &, const A &) {
+  // Default catch-all when RHS of pointer assignment isn't recognized
+  messages.Say("Pointer target must be designator or variable"_err_en_US);
+}
+
+template<typename T>
+void CheckPointerAssignment(parser::ContextualMessages &messages,
+    const Symbol &lhs, const FunctionRef<T> &f) {
+  if (const auto *symbol{f.proc().GetSymbol()}) {
+    const Symbol &ultimate{symbol->GetUltimate()};
+    const auto *details{
+        ultimate.template detailsIf<semantics::ProcEntityDetails>()};
+    CHECK(details != nullptr);
+    if (const Symbol * interfaceSymbol{details->interface().symbol()}) {
+      if (interfaceSymbol->attrs().test(semantics::Attr::POINTER)) {
+        if (IsProcedurePointer(lhs)) {
+          messages.Say(
+              "TODO pmk: proc pointer assignment from function reference"_err_en_US);
+          return;
+        } else {
+          return;  // P => pointer-valued F(), ok if types are ok
+        }
+      }
+    }
+  } else {
+    const auto &name{std::get<SpecificIntrinsic>(f.proc().u).name};
+    if (name == "null") {
+      if (!f.arguments().empty()) {
+        CHECK(f.arguments().size() == 1);  // MOLD=
+        // TODO pmk: do anything with mold?
+      }
+      return;
+    }
+  }
+  messages.Say(
+      "Pointer target is not a reference to a pointer-valued function"_err_en_US);
+}
+
+template<typename T>
+void CheckPointerAssignment(parser::ContextualMessages &messages,
+    const Symbol &lhs, const Designator<T> &d) {
+  if (const auto *symbol{d.GetBaseObject().symbol()}) {
+    const Symbol &ultimate{symbol->GetUltimate()};
+    if (IsProcedurePointer(lhs)) {
+      if (ultimate.template has<semantics::ObjectEntityDetails>() &&
+          ultimate.attrs().HasAny(semantics::Attrs(
+              {semantics::Attr::POINTER, semantics::Attr::TARGET}))) {
+        return;
+      }
+    } else {
+      messages.Say(
+          "Pointer target is not an object with POINTER or TARGET attributes"_err_en_US);
+    }
+  } else {
+    // P => "character literal"(1:3)
+    messages.Say("Pointer target is not a named entity"_err_en_US);
+  }
+}
+
+template<typename T>
+void CheckPointerAssignment(
+    parser::ContextualMessages &messages, const Symbol &lhs, const Expr<T> &x) {
+  std::visit(
+      [&](const auto &x) { CheckPointerAssignment(messages, lhs, x); }, x.u);
+}
+
+void CheckPointerAssignment(parser::ContextualMessages &messages,
+    const Symbol &lhs, const evaluate::Expr<evaluate::SomeType> &rhs) {
+  if (auto symType{GetSymbolType(lhs)}) {
+    if (auto exprType{rhs.GetType()}) {
+      if (*symType != *exprType) {
+        // TODO pmk: allow extended type assignment CLASS() pointer assignment
+        messages.Say(
+            "Pointer target has type '%s' but must have type '%s'"_err_en_US,
+            exprType->AsFortran().data(), symType->AsFortran().data());
+      } else {
+        // TODO pmk: get values for deferred type parameters from RHS
+      }
+    }
+  }
+  std::visit(
+      [&](const auto &x) { CheckPointerAssignment(messages, lhs, x); }, rhs.u);
+}
+}
+
+DEFINE_OWNING_DESTRUCTOR(ForwardReference, semantics::AssignmentContext)
 
 namespace Fortran::semantics {
 
@@ -131,8 +224,6 @@ private:
 };
 
 }  // namespace Fortran::semantics
-
-DEFINE_OWNING_DESTRUCTOR(ForwardReference, semantics::AssignmentContext)
 
 namespace Fortran::semantics {
 
@@ -355,7 +446,5 @@ public:
 private:
   SemanticsContext &context_;
 };
-
 }
-
-}  // namespace Fortran::semantics
+}

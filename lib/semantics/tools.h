@@ -33,6 +33,7 @@ const Symbol *FindPointerComponent(const Scope &);
 const Symbol *FindPointerComponent(const DerivedTypeSpec &);
 const Symbol *FindPointerComponent(const DeclTypeSpec &);
 const Symbol *FindPointerComponent(const Symbol &);
+const Symbol *FindFunctionResult(const Symbol &);
 
 bool IsCommonBlockContaining(const Symbol &block, const Symbol &object);
 bool DoesScopeContain(const Scope *maybeAncestor, const Scope &maybeDescendent);
@@ -44,6 +45,7 @@ bool IsPointerDummy(const Symbol &);
 bool IsFunction(const Symbol &);
 bool IsPureFunction(const Symbol &);
 bool IsPureFunction(const Scope &);
+bool IsProcedurePointer(const Symbol &);
 
 // Determines whether an object might be visible outside a
 // PURE function (C1594); returns a non-null Symbol pointer for

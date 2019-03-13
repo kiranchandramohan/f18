@@ -87,7 +87,8 @@ bool IsUseAssociated(const Symbol &symbol, const Scope &scope) {
       owner != FindProgramUnitContaining(scope);
 }
 
-bool DoesScopeContain(const Scope *maybeAncestor, const Scope &maybeDescendent) {
+bool DoesScopeContain(
+    const Scope *maybeAncestor, const Scope &maybeDescendent) {
   if (maybeAncestor != nullptr) {
     const Scope *scope{&maybeDescendent};
     while (scope->kind() != Scope::Kind::Global) {
@@ -144,6 +145,10 @@ bool IsPureFunction(const Scope &scope) {
   } else {
     return false;
   }
+}
+
+bool IsProcedurePointer(const Symbol &symbol) {
+  return symbol.has<ProcEntityDetails>() && symbol.attrs().test(Attr::POINTER);
 }
 
 static const Symbol *FindPointerComponent(
@@ -225,5 +230,18 @@ const Symbol *FindExternallyVisibleObject(
   } else {
     return nullptr;
   }
+}
+
+const Symbol *FindFunctionResult(const Symbol &symbol) {
+  if (const auto *procEntity{symbol.detailsIf<ProcEntityDetails>()}) {
+    if (procEntity->symbol()) {
+      return FindFunctionResult(procEntity->symbol());
+    }
+  } else if (const auto *subp{symbol.detailsIf<SubprogramDetails>()}) {
+    if (subp->isFunction()) {
+      return &subp->result();
+    }
+  }
+  return nullptr;
 }
 }

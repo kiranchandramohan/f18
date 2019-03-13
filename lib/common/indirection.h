@@ -66,8 +66,8 @@ public:
   A &value() { return *p_; }
   const A &value() const { return *p_; }
 
-  bool operator==(const A &x) const { return *p_ == x; }
-  bool operator==(const Indirection &that) const { return *p_ == *that.p_; }
+  bool operator==(const A &x) const { return x == *p_; }
+  bool operator==(const Indirection &that) const { return *that.p_ == *p_; }
 
   template<typename... ARGS> static Indirection Make(ARGS &&... args) {
     return {new A(std::forward<ARGS>(args)...)};
@@ -117,8 +117,8 @@ public:
   A &value() { return *p_; }
   const A &value() const { return *p_; }
 
-  bool operator==(const A &x) const { return *p_ == x; }
-  bool operator==(const Indirection &that) const { return *p_ == *that.p_; }
+  bool operator==(const A &x) const { return x == *p_; }
+  bool operator==(const Indirection &that) const { return *that.p_ == *p_; }
 
   template<typename... ARGS> static Indirection Make(ARGS &&... args) {
     return {new A(std::forward<ARGS>(args)...)};
@@ -170,10 +170,10 @@ public:
     return *p_;
   }
 
-  bool operator==(const A &x) const { return p_ != nullptr && *p_ == x; }
+  bool operator==(const A &x) const { return p_ != nullptr && x == *p_; }
   bool operator==(const OwningPointer &that) const {
     return (p_ == nullptr && that.p_ == nullptr) ||
-        (that.p_ != nullptr && *this == *that.p_);
+        (that.p_ != nullptr && *that.p_ == *this);
   }
 
 private:

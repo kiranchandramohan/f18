@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "expression.h"
+#include "assignment.h"
 #include "scope.h"
 #include "semantics.h"
 #include "symbol.h"
@@ -1016,7 +1017,6 @@ void ArrayConstructorContext::Push(MaybeExpr &&x) {
       // the values as the type of a numeric constructed array, convert all
       // of the other values to that type.  Alternative: let the first value
       // determine the type, and convert the others to that type.
-      // TODO pmk: better type compatibility checks for derived types
       CHECK(!explicitType_);
       type_ = std::move(xType);
       constantLength_ = ToInt64(type_->length);
@@ -1248,6 +1248,8 @@ MaybeExpr ExpressionAnalyzer::Analyze(
     const parser::Expr &expr{
         std::get<parser::ComponentDataSource>(component.t).v.value()};
     parser::CharBlock source{expr.source};
+    auto &messages{GetContextualMessages()};
+    auto restorer{messages.SetLocation(source)};
     const Symbol *symbol{nullptr};
     if (const auto &kw{std::get<std::optional<parser::Keyword>>(component.t)}) {
       source = kw->v.source;
@@ -1303,54 +1305,44 @@ MaybeExpr ExpressionAnalyzer::Analyze(
       }
       unavailable.insert(symbol->name());
       if (MaybeExpr value{Analyze(expr)}) {
-        bool isNULL{std::holds_alternative<NullPointer>(value->u)};
         if (symbol->has<semantics::ProcEntityDetails>()) {
           CHECK(symbol->attrs().test(semantics::Attr::POINTER));
-          if (!isNULL) {
-            // TODO C7104: check that procedure pointer components are
-            // being initialized with compatible procedure designators
-            Say(expr.source,
-                "TODO: non-null procedure pointer component value not implemented yet"_err_en_US);
-          }
         } else {
           CHECK(symbol->has<semantics::ObjectEntityDetails>());
           // C1594(4)
-          if (!isNULL) {
-            const auto &innermost{context().FindScope(expr.source)};
-            if (const auto *pureFunc{
-                    semantics::FindPureFunctionContaining(&innermost)}) {
+          const auto &innermost{context().FindScope(expr.source)};
+          if (const auto *pureFunc{
+                  semantics::FindPureFunctionContaining(&innermost)}) {
+            if (const Symbol *
+                pointer{semantics::FindPointerComponent(*symbol)}) {
               if (const Symbol *
-                  pointer{semantics::FindPointerComponent(*symbol)}) {
-                if (const Symbol *
-                    object{semantics::FindExternallyVisibleObject(
-                        *value, *pureFunc)}) {
-                  if (auto *msg{Say(expr.source,
-                          "Externally visible object '%s' must not be "
-                          "associated with pointer component '%s' in a "
-                          "PURE function"_err_en_US,
-                          object->name().ToString().data(),
-                          pointer->name().ToString().data())}) {
-                    msg->Attach(object->name(), "Object declaration"_en_US)
-                        .Attach(pointer->name(), "Pointer declaration"_en_US);
-                  }
+                  object{semantics::FindExternallyVisibleObject(
+                      *value, *pureFunc)}) {
+                if (auto *msg{Say(expr.source,
+                        "Externally visible object '%s' must not be "
+                        "associated with pointer component '%s' in a "
+                        "PURE function"_err_en_US,
+                        object->name().ToString().data(),
+                        pointer->name().ToString().data())}) {
+                  msg->Attach(object->name(), "Object declaration"_en_US)
+                      .Attach(pointer->name(), "Pointer declaration"_en_US);
                 }
+              } else {
+                // TODO pmk: COMPONENT => pointer-valued FUNC() in pure func
               }
             }
           }
-          if (symbol->attrs().test(semantics::Attr::POINTER)) {
-            if (!isNULL) {
-              // TODO C7104: check that object pointer components are
-              // being initialized with compatible object designators
-            }
-          } else if (MaybeExpr converted{
-                         ConvertToType(*symbol, std::move(*value))}) {
-            result.Add(*symbol, std::move(*converted));
-          } else {
-            if (auto *msg{Say(expr.source,
-                    "Structure constructor value is incompatible with component '%s'"_err_en_US,
-                    symbol->name().ToString().data())}) {
-              msg->Attach(symbol->name(), "Component declaration"_en_US);
-            }
+        }
+        if (symbol->attrs().test(semantics::Attr::POINTER)) {
+          CheckPointerAssignment(messages, *symbol, *value);  // C7104, C7105
+        } else if (MaybeExpr converted{
+                       ConvertToType(*symbol, std::move(*value))}) {
+          result.Add(*symbol, std::move(*converted));
+        } else {
+          if (auto *msg{Say(expr.source,
+                  "Structure constructor value is incompatible with component '%s'"_err_en_US,
+                  symbol->name().ToString().data())}) {
+            msg->Attach(symbol->name(), "Component declaration"_en_US);
           }
         }
       }

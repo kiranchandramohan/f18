@@ -66,8 +66,11 @@ public:
   A &value() { return *p_; }
   const A &value() const { return *p_; }
 
-  bool operator==(const A &x) const { return x == *p_; }
-  bool operator==(const Indirection &that) const { return *that.p_ == *p_; }
+  // Optional comparison operators; use DEFINE_OWNING_EQUALITY_TESTS to enable
+  bool operator==(const A &) const;
+  bool operator==(const Indirection &) const;
+  bool operator!=(const A &) const;
+  bool operator!=(const Indirection &) const;
 
   template<typename... ARGS> static Indirection Make(ARGS &&... args) {
     return {new A(std::forward<ARGS>(args)...)};
@@ -117,8 +120,11 @@ public:
   A &value() { return *p_; }
   const A &value() const { return *p_; }
 
-  bool operator==(const A &x) const { return x == *p_; }
-  bool operator==(const Indirection &that) const { return *that.p_ == *p_; }
+  // Optional comparison operators; use DEFINE_OWNING_EQUALITY_TESTS to enable
+  bool operator==(const A &) const;
+  bool operator==(const Indirection &) const;
+  bool operator!=(const A &) const;
+  bool operator!=(const Indirection &) const;
 
   template<typename... ARGS> static Indirection Make(ARGS &&... args) {
     return {new A(std::forward<ARGS>(args)...)};
@@ -170,11 +176,11 @@ public:
     return *p_;
   }
 
-  bool operator==(const A &x) const { return p_ != nullptr && x == *p_; }
-  bool operator==(const OwningPointer &that) const {
-    return (p_ == nullptr && that.p_ == nullptr) ||
-        (that.p_ != nullptr && *that.p_ == *this);
-  }
+  // Optional comparison operators; use DEFINE_OWNING_EQUALITY_TESTS to enable
+  bool operator==(const A &) const;
+  bool operator==(const OwningPointer &) const;
+  bool operator!=(const A &) const;
+  bool operator!=(const OwningPointer &) const;
 
 private:
   A *p_{nullptr};
@@ -222,11 +228,11 @@ public:
   A &value() { return *p_; }
   const A &value() const { return *p_; }
 
-  bool operator==(const A &x) const { return *p_ == x; }
-  bool operator==(const ForwardReference &that) const {
-    return *p_ == *that.p_;
-  }
-
+  // Optional comparison operators; use DEFINE_OWNING_EQUALITY_TESTS to enable
+  bool operator==(const A &) const;
+  bool operator==(const ForwardReference &) const;
+  bool operator!=(const A &x) const { return !(*this == x); }
+  bool operator!=(const ForwardReference &x) const { return !(*this == x); }
 private:
   A *p_{nullptr};
 };
@@ -241,6 +247,15 @@ private:
     delete p_; \
     p_ = nullptr; \
   } \
+  }
+
+// This is optional.
+#define DEFINE_OWNING_EQUALITY_TESTS(CLASS, A) \
+  namespace Fortran::common { \
+    bool CLASS<A>::operator==(const A &x) const { return *p_ == x; } \
+    bool CLASS<A>::operator==(const CLASS<A> &x) const { return *p_ == *x.p_; } \
+    bool CLASS<A>::operator!=(const A &x) const { return *p_ != x; } \
+    bool CLASS<A>::operator!=(const CLASS<A> &x) const { return *p_ != *x.p_; } \
   }
 
 // Optional definitions for OwningPointer and ForwardReference

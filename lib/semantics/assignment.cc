@@ -118,8 +118,6 @@ void CheckPointerAssignment(parser::ContextualMessages &messages,
 }
 }
 
-DEFINE_OWNING_DESTRUCTOR(ForwardReference, semantics::AssignmentContext)
-
 namespace Fortran::semantics {
 
 using ControlExpr = evaluate::Expr<evaluate::SubscriptInteger>;
@@ -447,4 +445,6 @@ private:
   SemanticsContext &context_;
 };
 }
+
+DEFINE_OWNING_DESTRUCTOR(ForwardReference, semantics::AssignmentContext)
 }
